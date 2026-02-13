@@ -62,7 +62,16 @@ export function ChatPage() {
 
   // Handle new message
   const handleNewMessage = useCallback((message: Message) => {
-    setMessages((prev) => [...prev, message])
+    setMessages((prev) => {
+      // Se a mensagem é do próprio usuário, substituir a mensagem temporária
+      if (message.senderId === user?.id) {
+        // Remover mensagem temporária e adicionar a real
+        const withoutTemp = prev.filter(m => !m.id.startsWith('temp-'))
+        return [...withoutTemp, message]
+      }
+      // Se é de outro usuário, apenas adicionar
+      return [...prev, message]
+    })
 
     // Update conversation list with new last message
     setConversations((prev) =>
@@ -72,7 +81,7 @@ export function ChatPage() {
           : conv
       ).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     )
-  }, [])
+  }, [user?.id])
 
   // Handle typing update
   const handleTypingUpdate = useCallback((data: { userId: string; isTyping: boolean }) => {
