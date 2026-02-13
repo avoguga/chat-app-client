@@ -15,6 +15,13 @@ export function AudioRecorder({ onRecordingComplete, onCancel }: AudioRecorderPr
 
   const startRecording = async () => {
     try {
+      // Verificar se mediaDevices está disponível (requer HTTPS)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Gravação de áudio requer conexão HTTPS. Configure SSL no servidor.')
+        onCancel()
+        return
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
