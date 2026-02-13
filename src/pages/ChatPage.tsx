@@ -5,8 +5,17 @@ import { useCall } from '../contexts/CallContext'
 import { useSocketChat } from '../hooks/useSocket'
 import { Sidebar } from '../components/sidebar'
 import { ChatHeader, MessageList, MessageInput, TypingIndicator } from '../components/chat'
-import { Conversation, Message, User } from '../types'
+import { Conversation, Message, User, MessageType } from '../types'
 import { api } from '../services/api'
+
+interface MediaPayload {
+  type: MessageType
+  mediaUrl: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  duration?: number
+}
 
 export function ChatPage() {
   const { user } = useAuth()
@@ -126,6 +135,42 @@ export function ChatPage() {
     sendMessage(content)
   }, [selectedConversation, socket, user, sendMessage])
 
+  // Handle send media message
+  const handleSendMedia = useCallback((content: string, media: MediaPayload) => {
+    if (!selectedConversation || !socket) return
+
+    // Optimistic update
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content,
+      type: media.type,
+      status: 'SENT',
+      senderId: user!.id,
+      conversationId: selectedConversation.id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      mediaUrl: media.mediaUrl,
+      fileName: media.fileName,
+      fileSize: media.fileSize,
+      mimeType: media.mimeType,
+      duration: media.duration,
+    }
+
+    setMessages((prev) => [...prev, optimisticMessage])
+
+    // Emit via socket
+    socket.emit('message:send', {
+      conversationId: selectedConversation.id,
+      content,
+      type: media.type,
+      mediaUrl: media.mediaUrl,
+      fileName: media.fileName,
+      fileSize: media.fileSize,
+      mimeType: media.mimeType,
+      duration: media.duration,
+    })
+  }, [selectedConversation, socket, user])
+
   // Start conversation with user
   const handleStartConversation = async (otherUser: User) => {
     try {
@@ -168,6 +213,34 @@ export function ChatPage() {
 
   const otherUser = getOtherUser()
 
+  // Handle group created
+  const handleGroupCreated = (conversation: Conversation) => {
+    setConversations((prev) => [conversation, ...prev])
+    setSelectedConversation(conversation)
+  }
+
+  // Get display info for conversation
+  const getConversationInfo = () => {
+    if (!selectedConversation) return null
+
+    if (selectedConversation.type === 'GROUP') {
+      return {
+        name: selectedConversation.name || 'Grupo',
+        isOnline: false,
+        isGroup: true,
+        participantCount: selectedConversation.participants.length,
+      }
+    }
+
+    return otherUser ? {
+      name: otherUser.displayName || otherUser.username,
+      isOnline: otherUser.isOnline,
+      isGroup: false,
+    } : null
+  }
+
+  const conversationInfo = getConversationInfo()
+
   return (
     <div className="h-screen flex">
       <Sidebar
@@ -175,16 +248,19 @@ export function ChatPage() {
         selectedConversationId={selectedConversation?.id}
         onSelectConversation={setSelectedConversation}
         onStartConversation={handleStartConversation}
+        onGroupCreated={handleGroupCreated}
         isLoading={isLoadingConversations}
       />
 
       <main className="flex-1 flex flex-col bg-gray-50">
-        {selectedConversation && otherUser ? (
+        {selectedConversation && conversationInfo ? (
           <>
             <ChatHeader
               user={otherUser}
-              onVoiceCall={handleVoiceCall}
-              onVideoCall={handleVideoCall}
+              groupName={conversationInfo.isGroup ? conversationInfo.name : undefined}
+              participantCount={conversationInfo.isGroup ? conversationInfo.participantCount : undefined}
+              onVoiceCall={!conversationInfo.isGroup ? handleVoiceCall : undefined}
+              onVideoCall={!conversationInfo.isGroup ? handleVideoCall : undefined}
             />
 
             <MessageList messages={messages} isLoading={isLoadingMessages} />
@@ -195,6 +271,7 @@ export function ChatPage() {
 
             <MessageInput
               onSend={handleSendMessage}
+              onSendMedia={handleSendMedia}
               onTypingStart={startTyping}
               onTypingStop={stopTyping}
               disabled={!isConnected}

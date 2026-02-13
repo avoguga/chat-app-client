@@ -1,5 +1,6 @@
 import { Message } from '../../types'
 import { useAuth } from '../../contexts/AuthContext'
+import { MediaMessage } from './MediaMessage'
 
 interface MessageItemProps {
   message: Message
@@ -8,6 +9,7 @@ interface MessageItemProps {
 export function MessageItem({ message }: MessageItemProps) {
   const { user } = useAuth()
   const isOwn = message.senderId === user?.id
+  const isMediaMessage = ['IMAGE', 'VIDEO', 'AUDIO', 'FILE'].includes(message.type)
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
@@ -48,7 +50,11 @@ export function MessageItem({ message }: MessageItemProps) {
             : 'bg-white text-gray-900 rounded-bl-md shadow-sm'
         }`}
       >
-        <p className="break-words">{message.content}</p>
+        {isMediaMessage ? (
+          <MediaMessage message={message} isOwn={isOwn} />
+        ) : (
+          <p className="break-words">{message.content}</p>
+        )}
         <div className={`flex items-center justify-end gap-1 mt-1 ${isOwn ? 'text-primary-200' : 'text-gray-400'}`}>
           <span className="text-xs">{formatTime(message.createdAt)}</span>
           {isOwn && getStatusIcon()}
